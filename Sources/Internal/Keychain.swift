@@ -71,7 +71,7 @@ internal final class Keychain {
     
     internal static func object(forKey key: String, options: [String : AnyHashable]) -> SecItem.DataResult<Data> {
         guard !key.isEmpty else {
-            ErrorHandler.assertionFailure("Can not set a value with an empty key.")
+            ErrorHandler.assertionFailure("Can not get a value with an empty key.")
             return SecItem.DataResult.error(errSecParam)
         }
         
@@ -79,6 +79,25 @@ internal final class Keychain {
         secItemQuery[kSecAttrAccount as String] = key
         secItemQuery[kSecMatchLimit as String] = kSecMatchLimitOne
         secItemQuery[kSecReturnData as String] = true
+        
+        return SecItem.copy(matching: secItemQuery)
+    }
+    
+    internal static func secKey(forKey key: String, options: [String: AnyHashable]) -> SecItem.DataResult<SecKey> {
+        guard !key.isEmpty else {
+            ErrorHandler.assertionFailure("Can not get a value with an empty key.")
+            return SecItem.DataResult.error(errSecParam)
+        }
+        
+        guard let tag = key.data(using: .utf8) else {
+            ErrorHandler.assertionFailure("Can not create tag from key.")
+            return SecItem.DataResult.error(errSecParam)
+        }
+        
+        var secItemQuery = options
+        secItemQuery[kSecAttrApplicationTag as String] = tag
+        secItemQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        secItemQuery[kSecReturnRef as String] = true
         
         return SecItem.copy(matching: secItemQuery)
     }
@@ -124,6 +143,28 @@ internal final class Keychain {
         #endif
     }
     
+    internal static func set(secKey: SecKey, forKey key: String, options: [String: AnyHashable]) -> SecItem.Result {
+        guard !key.isEmpty else {
+            ErrorHandler.assertionFailure("Can not set a value with an empty key.")
+            return .error(errSecParam)
+        }
+        
+        guard let tag = key.data(using: .utf8) else {
+            ErrorHandler.assertionFailure("Can not create tag from key.")
+            return .error(errSecParam)
+        }
+        
+        var secItemQuery = options
+        secItemQuery[kSecAttrApplicationTag as String] = tag
+        
+        if case .success = containsSecKey(forKey: key, options: options) {
+            _ = SecItem.deleteItems(matching: secItemQuery)
+        }
+        
+        secItemQuery[kSecValueRef as String] = secKey
+        return SecItem.add(attributes: secItemQuery)
+    }
+    
     // MARK: Removal
     
     internal static func removeObject(forKey key: String, options: [String : AnyHashable]) -> SecItem.Result {
@@ -150,6 +191,37 @@ internal final class Keychain {
             }
         }
     }
+    
+    internal static func removeSecKey(forKey key: String, options: [String : AnyHashable]) -> SecItem.Result {
+        guard !key.isEmpty else {
+            ErrorHandler.assertionFailure("Can not get a value with an empty key.")
+            return .error(errSecParam)
+        }
+        
+        guard let tag = key.data(using: .utf8) else {
+            ErrorHandler.assertionFailure("Can not create tag from key.")
+            return .error(errSecParam)
+        }
+        
+        var secItemQuery = options
+        secItemQuery[kSecAttrApplicationTag as String] = tag
+        
+        switch SecItem.deleteItems(matching: secItemQuery) {
+        case .success:
+            return .success
+            
+        case let .error(status):
+            switch status {
+            case errSecInteractionNotAllowed, errSecMissingEntitlement:
+                return .error(status)
+                
+            default:
+                // We succeeded as long as we can confirm that the item is not in the keychain.
+                return .success
+            }
+        }
+    }
+    
     
     internal static func removeAllObjects(matching options: [String : AnyHashable]) -> SecItem.Result {
         switch SecItem.deleteItems(matching: options) {
@@ -178,6 +250,29 @@ internal final class Keychain {
         
         var secItemQuery = options
         secItemQuery[kSecAttrAccount as String] = key
+        
+        switch SecItem.containsObject(matching: secItemQuery) {
+        case .success:
+            return .success
+            
+        case let .error(status):
+            return .error(status)
+        }
+    }
+    
+    internal static func containsSecKey(forKey key: String, options: [String : AnyHashable]) -> SecItem.Result {
+        guard !key.isEmpty else {
+            ErrorHandler.assertionFailure("Can not get a value with an empty key.")
+            return .error(errSecParam)
+        }
+        
+        guard let tag = key.data(using: .utf8) else {
+            ErrorHandler.assertionFailure("Can not create tag from key.")
+            return .error(errSecParam)
+        }
+        
+        var secItemQuery = options
+        secItemQuery[kSecAttrApplicationTag as String] = tag
         
         switch SecItem.containsObject(matching: secItemQuery) {
         case .success:
