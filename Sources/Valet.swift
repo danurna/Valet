@@ -150,7 +150,7 @@ public final class Valet: NSObject, KeychainQueryConvertible {
     @discardableResult
     public func set(object: Data, forKey key: String) -> Bool {
         return execute(in: lock) {
-            switch Keychain.set(object: object, forKey: key, options: keychainQuery) {
+            switch Keychain.set(object: object, forKey: key, options: service.generateBaseQuery(for: .password)) {
             case .success:
                 return true
                 
@@ -165,7 +165,7 @@ public final class Valet: NSObject, KeychainQueryConvertible {
     @objc(objectForKey:)
     public func object(forKey key: String) -> Data? {
         return execute(in: lock) {
-            switch Keychain.object(forKey: key, options: keychainQuery) {
+            switch Keychain.object(forKey: key, options: service.generateBaseQuery(for: .password)) {
             case let .success(data):
                 return data
                 
@@ -196,7 +196,7 @@ public final class Valet: NSObject, KeychainQueryConvertible {
     @discardableResult
     public func set(string: String, forKey key: String) -> Bool {
         return execute(in: lock) {
-            switch Keychain.set(string: string, forKey: key, options: keychainQuery) {
+            switch Keychain.set(string: string, forKey: key, options: service.generateBaseQuery(for: .password)) {
             case .success:
                 return true
                 
@@ -211,7 +211,7 @@ public final class Valet: NSObject, KeychainQueryConvertible {
     @objc(stringForKey:)
     public func string(forKey key: String) -> String? {
         return execute(in: lock) {
-            switch Keychain.string(forKey: key, options: keychainQuery) {
+            switch Keychain.string(forKey: key, options: service.generateBaseQuery(for: .password)) {
             case let .success(data):
                 return data
                 
@@ -220,6 +220,51 @@ public final class Valet: NSObject, KeychainQueryConvertible {
             }
         }
     }
+    /// - parameter secKey: A SecKey value to be inserted into the keychain.
+    /// - parameter key: A Key that can be used to retrieve the `secKey` from the keychain.
+    /// - returns: `true` if the operation succeeded, or `false` if the keychain is not accessible.
+    @objc(setSecKey:forKey:)
+    @discardableResult
+    public func set(secKey: SecKey, forKey key: String) -> Bool {
+        return execute(in: lock) {
+            switch Keychain.set(secKey: secKey, forKey: key, options: service.generateBaseQuery(for: .key)) {
+            case .success:
+                return true
+                
+            case .error:
+                return false
+            }
+        }
+    }
+    
+    /// - parameter key: A Key used to retrieve the desired object from the keychain.
+    /// - returns: The secKey currently stored in the keychain for the provided key. Returns `nil` if no secKey exists in the keychain for the specified key, or if the keychain is inaccessible.
+    @objc(secKeyForKey:)
+    public func secKey(forKey key: String) -> SecKey? {
+        return execute(in: lock) {
+            switch Keychain.secKey(forKey: key, options: service.generateBaseQuery(for: .key)) {
+            case let .success(secKey):
+                return secKey
+                
+            case .error:
+                return nil
+            }
+        }
+    }
+    
+    @objc(removeSecKeyForKey:)
+    public func removeSecKey(forKey key: String) -> Bool {
+        return execute(in: lock) {
+            switch Keychain.removeSecKey(forKey: key, options: service.generateBaseQuery(for: .key)) {
+            case .success:
+                return true
+                
+            case .error:
+                return false
+            }
+        }
+    }
+    
     
     /// - returns: The set of all (String) keys currently stored in this Valet instance.
     @objc
@@ -257,11 +302,12 @@ public final class Valet: NSObject, KeychainQueryConvertible {
     @discardableResult
     public func removeAllObjects() -> Bool {
         return execute(in: lock) {
-            switch Keychain.removeAllObjects(matching: keychainQuery) {
-            case .success:
+            let passwordClassResult = Keychain.removeAllObjects(matching: service.generateBaseQuery(for: .password))
+            let keyClassResult = Keychain.removeAllObjects(matching: service.generateBaseQuery(for: .key))
+            switch (passwordClassResult, keyClassResult) {
+            case (.success, .success):
                 return true
-                
-            case .error:
+            default:
                 return false
             }
         }

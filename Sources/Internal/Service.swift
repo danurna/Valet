@@ -20,6 +20,10 @@
 
 import Foundation
 
+internal enum SecClass {
+    case password
+    case key
+}
 
 internal enum Service: CustomStringConvertible, Equatable {
     case standard(Identifier, Configuration)
@@ -39,11 +43,16 @@ internal enum Service: CustomStringConvertible, Equatable {
     
     // MARK: Internal Methods
     
-    internal func generateBaseQuery() -> [String : AnyHashable] {
-        var baseQuery: [String : AnyHashable] = [
-            kSecClass as String : kSecClassGenericPassword as String,
-            kSecAttrService as String : secService
-        ]
+    internal func generateBaseQuery(for secClass: SecClass = .password) -> [String : AnyHashable] {
+        var baseQuery: [String : AnyHashable] = [:]
+        
+        switch secClass {
+        case .password:
+            baseQuery[kSecClass as String] = kSecClassGenericPassword as String
+            baseQuery[kSecAttrService as String] = secService
+        case .key:
+            baseQuery[kSecClass as String] = kSecClassKey as String
+        }
         
         let configuration: Configuration
         switch self {
